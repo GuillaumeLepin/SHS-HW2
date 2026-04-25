@@ -1,239 +1,277 @@
-"""
-HW2-2 Part 1: Neural Networks on MNIST
-Implements from scratch (NumPy) a softmax-regression classifier (no hidden
-layer) and a 1-hidden-layer MLP (128 units, ReLU). Trained with SGD using
-cross-entropy loss.
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_openml
 
-rng = np.random.default_rng(0)
+np.random.seed(42)
 
-
-# ---------------------------------------------------------------------------
-# Part 0: Load MNIST
-# ---------------------------------------------------------------------------
+# load mnist dataset from openml
 def load_mnist():
-    mnist = fetch_openml("mnist_784", version=1, as_frame=False, parser="auto")
-    X = mnist.data.astype(np.float32) / 255.0   # scale to [0, 1]
-    y = mnist.target.astype(np.int64)
-    # The canonical MNIST split: first 60k train, last 10k test
-    X_train, X_test = X[:60000], X[60000:]
-    y_train, y_test = y[:60000], y[60000:]
-    # Further carve out a validation set from training data
-    perm = rng.permutation(60000)
-    val_idx, tr_idx = perm[:10000], perm[10000:]
-    return (X_train[tr_idx], y_train[tr_idx],
-            X_train[val_idx], y_train[val_idx],
-            X_test, y_test)
+    print("loading mnist...")
+    data = fetch_openml("mnist_784", version=1, as_frame=False, parser="auto")
+    X = data.data / 255.0   # normalize
+    X = X.astype(np.float32)
+    y = data.target.astype(np.int64)
+
+    # split
+    X_train = X[:60000]
+    X_test  = X[60000:]
+    y_train = y[:60000]
+    y_test  = y[60000:]
+
+    # shuffle and make val set
+    perm = np.random.permutation(60000)
+    val_idx   = perm[:10000]
+    train_idx = perm[10000:]
+
+    Xtr  = X_train[train_idx]
+    ytr  = y_train[train_idx]
+    Xval = X_train[val_idx]
+    yval = y_train[val_idx]
+
+    print("train:", Xtr.shape, "val:", Xval.shape, "test:", X_test.shape)
+
+    return Xtr, ytr, Xval, yval, X_test, y_test
 
 
+# one hot encoding
 def one_hot(y, C=10):
-    Y = np.zeros((y.size, C), dtype=np.float32)
-    Y[np.arange(y.size), y] = 1.0
-    return Y
+    n = len(y)
+    Y = np.zeros((n, C))
+    for i in range(n):
+        Y[i, y[i]] = 1
+    return Y.astype(np.float32)
 
 
 def softmax(z):
-    # Numerically stable softmax (subtract row max)
-    z = z - z.max(axis=1, keepdims=True)
-    ez = np.exp(z)
-    return ez / ez.sum(axis=1, keepdims=True)
+    # subtract max to avoid overflow
+    z = z - np.max(z, axis=1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=1, keepdims=True)
 
 
-def cross_entropy(probs, y_int):
-    n = probs.shape[0]
-    return -np.log(probs[np.arange(n), y_int] + 1e-12).mean()
+def loss(probs, y):
+    n = len(y)
+    # cross entropy
+    return -np.mean(np.log(probs[np.arange(n), y] + 1e-9))
 
 
-def accuracy(probs, y_int):
-    return (probs.argmax(axis=1) == y_int).mean()
+def acc(probs, y):
+    return np.mean(probs.argmax(axis=1) == y)
 
 
-# ---------------------------------------------------------------------------
-# Part 1-2: Softmax regression  f(x) = softmax(W x + b)
-# ---------------------------------------------------------------------------
+# ===================== softmax regression =====================
+
 class SoftmaxRegression:
-    def __init__(self, in_dim=784, out_dim=10):
-        # He-ish init (small random)
-        self.W = rng.normal(0, 0.01, size=(in_dim, out_dim)).astype(np.float32)
-        self.b = np.zeros(out_dim, dtype=np.float32)
+
+    def __init__(self):
+        # 784 inputs, 10 classes
+        self.W = np.random.randn(784, 10).astype(np.float32) * 0.01
+        self.b = np.zeros(10, dtype=np.float32)
 
     def forward(self, X):
-        return softmax(X @ self.W + self.b)
+        z = X @ self.W + self.b
+        return softmax(z)
 
-    def step(self, X, Y, lr):
-        # Y is one-hot; gradient of cross-entropy w.r.t. pre-softmax is (p - Y)
+    def train_step(self, X, Y_oh, lr):
         probs = self.forward(X)
-        n = X.shape[0]
-        dlogits = (probs - Y) / n
-        self.W -= lr * (X.T @ dlogits)
-        self.b -= lr * dlogits.sum(axis=0)
-        return probs
+        N = X.shape[0]
+        # gradient
+        dz = (probs - Y_oh) / N
+        dW = X.T @ dz
+        db = dz.sum(axis=0)
+        self.W -= lr * dW
+        self.b -= lr * db
 
 
-# ---------------------------------------------------------------------------
-# Part 3: one hidden layer (128 units, ReLU) + softmax
-# ---------------------------------------------------------------------------
+# ===================== MLP 1 hidden layer =====================
+
 class MLP:
-    def __init__(self, in_dim=784, hidden=128, out_dim=10):
-        # Kaiming init for ReLU
-        self.W1 = rng.normal(0, np.sqrt(2.0 / in_dim),
-                             size=(in_dim, hidden)).astype(np.float32)
+
+    def __init__(self, hidden=128):
+        # kaiming init
+        self.W1 = np.random.randn(784, hidden).astype(np.float32) * np.sqrt(2.0 / 784)
         self.b1 = np.zeros(hidden, dtype=np.float32)
-        self.W2 = rng.normal(0, np.sqrt(2.0 / hidden),
-                             size=(hidden, out_dim)).astype(np.float32)
-        self.b2 = np.zeros(out_dim, dtype=np.float32)
+        self.W2 = np.random.randn(hidden, 10).astype(np.float32) * np.sqrt(2.0 / hidden)
+        self.b2 = np.zeros(10, dtype=np.float32)
 
-    def forward(self, X, cache=False):
+    def forward(self, X, keep_cache=False):
         z1 = X @ self.W1 + self.b1
-        a1 = np.maximum(z1, 0)                      # ReLU
+        a1 = np.maximum(0, z1)   # relu activation
         z2 = a1 @ self.W2 + self.b2
-        probs = softmax(z2)
-        if cache:
-            return probs, (X, z1, a1)
-        return probs
+        out = softmax(z2)
+        if keep_cache:
+            return out, z1, a1
+        return out
 
-    def step(self, X, Y, lr):
-        probs, (X, z1, a1) = self.forward(X, cache=True)
-        n = X.shape[0]
-        dz2 = (probs - Y) / n
+    def train_step(self, X, Y_oh, lr):
+        N = X.shape[0]
+        probs, z1, a1 = self.forward(X, keep_cache=True)
+
+        # backprop through output layer
+        dz2 = (probs - Y_oh) / N
         dW2 = a1.T @ dz2
         db2 = dz2.sum(axis=0)
+
+        # backprop through hidden layer
         da1 = dz2 @ self.W2.T
-        dz1 = da1 * (z1 > 0)
+        dz1 = da1.copy()
+        dz1[z1 <= 0] = 0    # relu derivative
         dW1 = X.T @ dz1
         db1 = dz1.sum(axis=0)
-        self.W2 -= lr * dW2; self.b2 -= lr * db2
-        self.W1 -= lr * dW1; self.b1 -= lr * db1
-        return probs
+
+        # update
+        self.W2 -= lr * dW2
+        self.b2 -= lr * db2
+        self.W1 -= lr * dW1
+        self.b1 -= lr * db1
 
 
-# ---------------------------------------------------------------------------
-# Training loop (mini-batch SGD)
-# ---------------------------------------------------------------------------
-def train(model, X_tr, y_tr, X_val, y_val,
-          epochs=20, batch_size=128, lr=0.1, patience=3):
-    Y_tr = one_hot(y_tr)
-    n = X_tr.shape[0]
+# ===================== training =====================
 
-    history = {"train_acc": [], "val_acc": [],
-               "train_loss": [], "val_loss": []}
+def train_model(model, Xtr, ytr, Xval, yval, n_epochs=20, batch_size=128, lr=0.1, patience=3):
+    Ytr = one_hot(ytr)
+    N = Xtr.shape[0]
 
-    best_val = 0.0
-    best_state = None
-    no_improve = 0
+    train_losses = []
+    val_losses   = []
+    train_accs   = []
+    val_accs     = []
 
-    for epoch in range(1, epochs + 1):
-        perm = rng.permutation(n)
-        for s in range(0, n, batch_size):
-            idx = perm[s:s + batch_size]
-            model.step(X_tr[idx], Y_tr[idx], lr)
+    best_val_acc = 0
+    best_weights = None
+    no_improve   = 0
 
-        p_tr = model.forward(X_tr)
-        p_val = model.forward(X_val)
-        tl = cross_entropy(p_tr, y_tr)
-        vl = cross_entropy(p_val, y_val)
-        ta = accuracy(p_tr, y_tr)
-        va = accuracy(p_val, y_val)
-        history["train_acc"].append(ta)
-        history["val_acc"].append(va)
-        history["train_loss"].append(tl)
-        history["val_loss"].append(vl)
-        print(f"epoch {epoch:2d} | loss tr={tl:.4f} val={vl:.4f} | "
-              f"acc tr={ta:.4f} val={va:.4f}")
+    for epoch in range(n_epochs):
+        # shuffle every epoch
+        idx = np.random.permutation(N)
+        Xshuf = Xtr[idx]
+        Yshuf = Ytr[idx]
 
-        # Early-stopping convergence criterion: best val acc hasn't improved
-        # for `patience` epochs.
-        if va > best_val + 1e-4:
-            best_val = va
-            best_state = {k: v.copy() for k, v in vars(model).items()}
+        for start in range(0, N, batch_size):
+            end   = start + batch_size
+            Xb    = Xshuf[start:end]
+            Yb    = Yshuf[start:end]
+            model.train_step(Xb, Yb, lr)
+
+        # evaluate
+        p_train = model.forward(Xtr)
+        p_val   = model.forward(Xval)
+
+        tl = loss(p_train, ytr)
+        vl = loss(p_val,   yval)
+        ta = acc(p_train,  ytr)
+        va = acc(p_val,    yval)
+
+        train_losses.append(tl)
+        val_losses.append(vl)
+        train_accs.append(ta)
+        val_accs.append(va)
+
+        print(f"epoch {epoch+1:2d}/{n_epochs}  train_loss={tl:.4f}  val_loss={vl:.4f}"
+              f"  train_acc={ta:.4f}  val_acc={va:.4f}")
+
+        # early stopping
+        if va > best_val_acc + 0.0001:
+            best_val_acc = va
+            # save weights
+            best_weights = {}
+            for k, v in vars(model).items():
+                best_weights[k] = v.copy()
             no_improve = 0
         else:
             no_improve += 1
-            if no_improve >= patience:
-                print(f"Converged (no val-acc improvement for {patience} epochs).")
+            if no_improve == patience:
+                print(f"  -> early stop (no improvement for {patience} epochs)")
                 break
 
-    if best_state is not None:
-        for k, v in best_state.items():
+    # reload best weights
+    if best_weights is not None:
+        for k, v in best_weights.items():
             setattr(model, k, v)
-    return history, best_val
+
+    history = {
+        "train_loss": train_losses,
+        "val_loss":   val_losses,
+        "train_acc":  train_accs,
+        "val_acc":    val_accs,
+    }
+    return history, best_val_acc
 
 
-# ---------------------------------------------------------------------------
-# Visualizations
-# ---------------------------------------------------------------------------
-def plot_weight_images(W, out_path):
-    # W has shape (784, 10) — one column per digit class
-    fig, axes = plt.subplots(2, 5, figsize=(10, 4))
-    for i, ax in enumerate(axes.flat):
-        img = W[:, i].reshape(28, 28)
-        ax.imshow(img, cmap="seismic",
-                  vmin=-np.abs(W).max(), vmax=np.abs(W).max())
-        ax.set_title(f"class {i}")
-        ax.axis("off")
+# ===================== plots =====================
+
+def plot_curves(history, title, filename):
+    epochs = range(1, len(history["train_loss"]) + 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    # loss
+    axes[0].plot(epochs, history["train_loss"], label="train")
+    axes[0].plot(epochs, history["val_loss"],   label="val")
+    axes[0].set_xlabel("epoch")
+    axes[0].set_ylabel("cross-entropy loss")
+    axes[0].set_title(title + " - loss")
+    axes[0].legend()
+
+    # accuracy
+    axes[1].plot(epochs, history["train_acc"], label="train")
+    axes[1].plot(epochs, history["val_acc"],   label="val")
+    axes[1].set_xlabel("epoch")
+    axes[1].set_ylabel("accuracy")
+    axes[1].set_title(title + " - accuracy")
+    axes[1].legend()
+
     plt.tight_layout()
-    plt.savefig(out_path, dpi=120)
+    plt.savefig(filename, dpi=120)
     plt.close()
 
 
-def plot_history(history, out_path, title):
-    fig, ax = plt.subplots(1, 2, figsize=(11, 4))
-    ax[0].plot(history["train_loss"], label="train")
-    ax[0].plot(history["val_loss"], label="val")
-    ax[0].set_xlabel("epoch"); ax[0].set_ylabel("cross-entropy")
-    ax[0].set_title(f"{title} — loss"); ax[0].legend()
-    ax[1].plot(history["train_acc"], label="train")
-    ax[1].plot(history["val_acc"], label="val")
-    ax[1].set_xlabel("epoch"); ax[1].set_ylabel("accuracy")
-    ax[1].set_title(f"{title} — accuracy"); ax[1].legend()
+def plot_weight_images(W, filename):
+    # visualize softmax weights as images
+    fig, axes = plt.subplots(2, 5, figsize=(12, 5))
+    for digit in range(10):
+        row = digit // 5
+        col = digit % 5
+        img = W[:, digit].reshape(28, 28)
+        m = np.abs(W).max()
+        axes[row, col].imshow(img, cmap="seismic", vmin=-m, vmax=m)
+        axes[row, col].set_title(f"digit {digit}")
+        axes[row, col].axis("off")
+    plt.suptitle("Softmax weights")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=120)
+    plt.savefig(filename, dpi=120)
     plt.close()
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-def main():
-    print("Loading MNIST...")
-    X_tr, y_tr, X_val, y_val, X_te, y_te = load_mnist()
-    print(f"  train={X_tr.shape}  val={X_val.shape}  test={X_te.shape}")
-
-    # --- Part 1 & 2: softmax regression (no hidden layer) ---
-    print("\n=== Part 1/2: softmax regression ===")
-    sr = SoftmaxRegression()
-    hist_sr, best_val_sr = train(sr, X_tr, y_tr, X_val, y_val,
-                                 epochs=30, batch_size=128, lr=0.1,
-                                 patience=4)
-    test_acc_sr = accuracy(sr.forward(X_te), y_te)
-    print(f"softmax regression — best val acc = {best_val_sr:.4f}, "
-          f"test acc = {test_acc_sr:.4f}")
-
-    plot_history(hist_sr, "part1_softmax_curves.png", "softmax regression")
-    plot_weight_images(sr.W, "part1_weight_images.png")
-
-    # --- Part 3: MLP with 128-unit hidden layer ---
-    print("\n=== Part 3: MLP with 128-unit hidden layer ===")
-    mlp = MLP(hidden=128)
-    hist_mlp, best_val_mlp = train(mlp, X_tr, y_tr, X_val, y_val,
-                                   epochs=30, batch_size=128, lr=0.1,
-                                   patience=4)
-    test_acc_mlp = accuracy(mlp.forward(X_te), y_te)
-    print(f"MLP — best val acc = {best_val_mlp:.4f}, "
-          f"test acc = {test_acc_mlp:.4f}")
-
-    plot_history(hist_mlp, "part1_mlp_curves.png", "MLP (128 hidden)")
-
-    print("\n=== Summary ===")
-    print(f"  softmax regression  best val acc = {best_val_sr:.4f}   "
-          f"test = {test_acc_sr:.4f}")
-    print(f"  MLP (128 hidden)    best val acc = {best_val_mlp:.4f}   "
-          f"test = {test_acc_mlp:.4f}")
-
+# ===================== main =====================
 
 if __name__ == "__main__":
-    main()
+
+    Xtr, ytr, Xval, yval, Xte, yte = load_mnist()
+
+    # --- part 1 & 2: softmax regression ---
+    print("\n=== Softmax Regression ===")
+    sr = SoftmaxRegression()
+    hist_sr, bv_sr = train_model(sr, Xtr, ytr, Xval, yval,
+                                  n_epochs=30, batch_size=128, lr=0.1, patience=4)
+
+    te_acc_sr = acc(sr.forward(Xte), yte)
+    print(f"best val acc = {bv_sr:.4f}  |  test acc = {te_acc_sr:.4f}")
+
+    plot_curves(hist_sr, "Softmax Regression", "part1_softmax_curves.png")
+    plot_weight_images(sr.W, "part1_weight_images.png")
+
+    # --- part 3: MLP ---
+    print("\n=== MLP (128 hidden units) ===")
+    mlp = MLP(hidden=128)
+    hist_mlp, bv_mlp = train_model(mlp, Xtr, ytr, Xval, yval,
+                                    n_epochs=30, batch_size=128, lr=0.1, patience=4)
+
+    te_acc_mlp = acc(mlp.forward(Xte), yte)
+    print(f"best val acc = {bv_mlp:.4f}  |  test acc = {te_acc_mlp:.4f}")
+
+    plot_curves(hist_mlp, "MLP (128 hidden)", "part1_mlp_curves.png")
+
+    print("\n--- final results ---")
+    print(f"softmax regression : test acc = {te_acc_sr:.4f}")
+    print(f"mlp (128 hidden)   : test acc = {te_acc_mlp:.4f}")

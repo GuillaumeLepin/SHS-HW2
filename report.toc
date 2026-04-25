@@ -1,0 +1,35 @@
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {section}{\numberline {2}Part 1: Neural Networks on MNIST}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Dataset and Preprocessing}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Softmax Regression}{2}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}Model}{2}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}Gradient Computation}{2}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Training Setup}{3}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {2.2.4}Results}{3}{subsubsection.2.2.4}%
+\contentsline {subsection}{\numberline {2.3}Multi-Layer Perceptron (MLP)}{4}{subsection.2.3}%
+\contentsline {subsubsection}{\numberline {2.3.1}Architecture}{4}{subsubsection.2.3.1}%
+\contentsline {subsubsection}{\numberline {2.3.2}Backpropagation}{4}{subsubsection.2.3.2}%
+\contentsline {subsubsection}{\numberline {2.3.3}Results}{4}{subsubsection.2.3.3}%
+\contentsline {subsection}{\numberline {2.4}Comparison}{4}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Part 2: Decision Tree on the Drugs Dataset}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Dataset Description}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Preprocessing}{5}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Baseline Model}{5}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Hyperparameter Tuning}{6}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Results}{6}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Discussion}{7}{subsection.3.6}%
+\contentsline {section}{\numberline {4}Part 3: Time Series Forecasting with SARIMA}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Dataset}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Stationarity Analysis}{8}{subsection.4.2}%
+\contentsline {subsubsection}{\numberline {4.2.1}Augmented Dickey--Fuller (ADF) Test}{8}{subsubsection.4.2.1}%
+\contentsline {subsubsection}{\numberline {4.2.2}ACF and PACF}{9}{subsubsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.3}Model Fitting}{10}{subsection.4.3}%
+\contentsline {paragraph}{Manual SARIMA$(1,1,1)(0,1,1)_{12}$.}{10}{section*.14}%
+\contentsline {paragraph}{ARIMA$(2,1,2)$.}{10}{section*.15}%
+\contentsline {paragraph}{Auto-SARIMA.}{10}{section*.16}%
+\contentsline {subsection}{\numberline {4.4}Forecast Results}{10}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Discussion}{12}{subsection.4.5}%
+\contentsline {paragraph}{Seasonality matters.}{12}{section*.21}%
+\contentsline {paragraph}{Manual vs.\ auto SARIMA.}{12}{section*.22}%
+\contentsline {paragraph}{Confidence intervals.}{12}{section*.23}%
+\contentsline {section}{\numberline {5}Conclusion}{12}{section.5}%
